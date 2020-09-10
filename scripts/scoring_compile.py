@@ -64,7 +64,13 @@ def main():
             bundle_overlap.append(float(tc_voxels/float(tc_voxels+missing_voxels)))
 
     final_BO_score = sum(bundle_overlap) / len(bundle_overlap)
-    print(final_BO_score)
+
+    result = {
+        "Ensemble_tractogram_Bundle_Overlap": final_BO_score
+    }
+
+    with open(args.output, 'w+') as of:
+        json.dump(result, of)
 
 if __name__ == "__main__":
     main()
