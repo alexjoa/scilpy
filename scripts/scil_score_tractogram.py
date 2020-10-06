@@ -99,7 +99,7 @@ def get_binary_maps(streamlines, dimensions, sft):
 
     if len(tmp_sft) == 1:
         return np.zeros(dimensions), np.zeros(dimensions)
-    
+
     bundles_voxels = compute_tract_counts_map(tmp_sft.streamlines,
                                               dimensions).astype(np.int16)
 
@@ -291,11 +291,11 @@ def main():
         fc_sft = StatefulTractogram.from_sft(fc_streamlines, sft)
         if len(fc_sft) > 0:
             if is_tp:
-                save_tractogram(fc_sft,  os.path.join(
+                save_tractogram(fc_sft, os.path.join(
                     args.out_dir, '{}_{}_fc_inv{}'.format(prefix_1,
                                                           prefix_2, ext)))
             else:
-                save_tractogram(fc_sft,  os.path.join(
+                save_tractogram(fc_sft, os.path.join(
                     args.out_dir, '{}_{}_fc{}'.format(prefix_1,
                                                       prefix_2, ext)))
 
@@ -305,7 +305,7 @@ def main():
                 save_tractogram(wpc_sft,
                                 os.path.join(args.out_dir,
                                              '{}_{}_wpc{}'.format(prefix_1,
-                                                                  prefix_2, 
+                                                                  prefix_2,
                                                                   ext)))
 
     no_conn_sft, _ = filter_grid_roi(sft, fused_masks,
@@ -321,7 +321,7 @@ def main():
 
     final_results = {}
     missing_conn_sft = StatefulTractogram.from_sft(missing_conn_streamlines, sft)
-    save_tractogram(missing_conn_sft,  os.path.join(
+    save_tractogram(missing_conn_sft, os.path.join(
         args.out_dir, 'mc{}'.format(ext)))
 
     # Total number of streamlines for each category
@@ -337,9 +337,10 @@ def main():
 
     mc_streamlines_count = len(missing_conn_streamlines)
     total_count = tc_streamlines_count + fc_streamlines_count + \
-        wpc_streamlines_count + mc_streamlines_count
+                  wpc_streamlines_count + mc_streamlines_count
 
     final_results['trk_filename'] = str(args.in_tractogram)
+    final_results['tractogram_overlap'] = 0.0
     final_results['tc_streamlines'] = tc_streamlines_count
     final_results['fc_streamlines'] = fc_streamlines_count
     final_results['mc_streamlines'] = mc_streamlines_count
@@ -359,6 +360,9 @@ def main():
 
     final_results['total_streamlines'] = total_count
     final_results["bundle_wise"] = {}
+    final_results["bundle_wise"]["true_connections"] = {}
+    final_results["bundle_wise"]["false_connections"] = {}
+    tractogram_overlap = 0.0
 
     # Bundle-wise statistics, useful for more complex phantom
     for i, filename in enumerate(comb_filename):
@@ -385,7 +389,7 @@ def main():
             tmp_dict['tc_dice'] = compute_dice_voxel(gt_bundle_masks[tc_pos],
                                                      current_tc_voxels)[0]
 
-            bundle_overlap = gt_bundle_masks[tc_pos]*current_tc_voxels
+            bundle_overlap = gt_bundle_masks[tc_pos] * current_tc_voxels
             bundle_overreach = np.zeros(dimensions)
             bundle_overreach[np.where((gt_bundle_masks[tc_pos] == 0)
                                       & (current_fc_voxels > 1))] = 1
@@ -396,9 +400,11 @@ def main():
             tmp_dict['tc_bundle_overlap'] = np.count_nonzero(bundle_overlap)
             tmp_dict['tc_bundle_overrach'] = np.count_nonzero(bundle_overreach)
             tmp_dict['tc_bundle_lacking'] = np.count_nonzero(bundle_lacking)
+            tmp_dict['tc_bundle_overlap_PCT'] = tmp_dict['tc_bundle_overlap'] / \
+                (tmp_dict['tc_bundle_overlap'] + tmp_dict['tc_bundle_lacking'])
+            tractogram_overlap += tmp_dict['tc_bundle_overlap_PCT']
 
-            endpoints_overlap = gt_bundle_masks[tc_pos] * \
-                current_tc_endpoints_voxels
+            endpoints_overlap = gt_bundle_masks[tc_pos] * current_tc_endpoints_voxels
             endpoints_overreach = np.zeros(dimensions)
             endpoints_overreach[np.where((gt_bundle_masks[tc_pos] == 0)
                                          & (current_fc_voxels > 1))] = 1
@@ -410,13 +416,14 @@ def main():
                 tmp_dict['wpc_dice'] = compute_dice_voxel(gt_bundle_masks[tc_pos],
                                                           current_wpc_voxels)[0]
 
-            final_results["bundle_wise"][str(filename)] = tmp_dict
+            final_results["bundle_wise"]["true_connections"][str(filename)] = tmp_dict
         elif len(current_fc_streamlines):
             tmp_dict['fc_streamlines'] = len(current_fc_streamlines)
             tmp_dict['fc_voxels'] = np.count_nonzero(current_fc_voxels)
 
-            final_results["bundle_wise"][str(filename)] = tmp_dict
+            final_results["bundle_wise"]["false_connections"][str(filename)] = tmp_dict
 
+    final_results['tractogram_overlap'] = tractogram_overlap/len(gt_bundle_masks)
     with open(os.path.join(args.out_dir, 'results.json'), 'w') as f:
         json.dump(final_results, f,
                   indent=args.indent,

@@ -72,18 +72,24 @@ def main():
         # Load all input streamlines.
         trk_intervals = [] #fused streamlines intervals (i.e. from 0 to x the streamline comes from the first tracto)
         fused_streamlines = []
+        gt_names = []
 
         for f in args.inputs:
             tmp_sft = load_tractogram_with_reference(parser, args, f)
             
             basename = os.path.basename(f)
-            gt_id = int(basename[basename.find("gt")+2:basename.find("_tc")])-1
+            # gt_id = int(basename[basename.find("gt")+2:basename.find("_tc")])-1
+            gt_name = str(basename[0:basename.find("_tc")])
+            if gt_name not in gt_names:
+                gt_names.append(gt_name)
+
+            gt_id = gt_names.index(str(gt_name))
             while gt_id >= len(trk_names):
                 trk_names.append([])
                 trk_intervals.append([0])
                 fused_streamlines.append([])
 
-            trk_names[gt_id].append(basename[:basename.find(".trk")])
+            trk_names[gt_id].append(f[f.find("scores/score_")+13:f.find(gt_name)-1])
 
             fused_streamlines[gt_id].extend(tmp_sft.streamlines)
 
@@ -114,18 +120,24 @@ def main():
     elif args.algo == 'voxel':
 
         all_masks = []
+        gt_names = []
         for f in args.inputs:
             basename = os.path.basename(f)
-            gt_id = int(basename[basename.find("gt") + 2:basename.find("_tc")]) - 1
+            # gt_id = int(basename[basename.find("gt") + 2:basename.find("_tc")]) - 1
+            gt_name = str(basename[0:basename.find("_tc")])
+            if gt_name not in gt_names:
+                gt_names.append(gt_name)
+
+            gt_id = gt_names.index(str(gt_name))
             while gt_id >= len(trk_names):
                 trk_names.append([])
                 all_masks.append([])
-            trk_names[gt_id].append(basename[:basename.find(".trk")])
+            trk_names[gt_id].append(f[f.find("scores/score_")+13:f.find(gt_name)-1])
 
             tmp_sft = load_tractogram_with_reference(parser, args, f)
             tmp_sft.to_vox()
             tmp_sft.to_corner()
-            _, dimensions, _, _ = tmp_sft.space_attribute
+            _, dimensions, _, _ = tmp_sft.space_attributes
             voxel_mask = compute_tract_counts_map(tmp_sft.streamlines, dimensions).astype(np.int16)
             voxel_mask[voxel_mask > 0] = 1
             all_masks[gt_id].append(voxel_mask)
@@ -168,12 +180,10 @@ def main():
             }
             # os.system("python scil_compute_local_tracking.py $fodf $seeding_mask $tracking_mask retrack_npv100_theta${theta}_step${step_size}_sphere${sphere}.trk --algo prob --npv ${npv} --theta ${theta} --step ${step_size} --sphere ${sphere}  --compress 0.2 -f")
 
-        top_trk_dict['gt' + str(gt + 1)] = top_trk_params
+        top_trk_dict[str(gt_names[gt])] = top_trk_params
 
     with open(args.output, 'w+') as fp:
         json.dump(top_trk_dict, fp, indent=4)
-
-    print("test")
 
 
 if __name__ == "__main__":
